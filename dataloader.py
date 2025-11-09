@@ -2,50 +2,53 @@
 ```python
 import os
 import numpy as np
+from scipy.io import loadmat
 import pandas as pd
 
-
 class DataLoader:
-def __init__(self, path=None):
-self.path = path
+    # Existing toy_data and normalize_segments functions here...
 
+    @staticmethod
+    def load_pulsedb(data_dir: str, signal_type: str = "ABP", limit: int = 1000):
+        """
+        Loads real PulseDB signals (.mat or .csv) into memory as time-series segments.
+        
+        Parameters
+        ----------
+        data_dir : str
+            Path to the folder where PulseDB files are stored.
+        signal_type : str
+            One of ['ABP', 'ECG', 'PPG'].
+        limit : int
+            Number of segments to load.
+        
+        Returns
+        -------
+        list of np.ndarray
+            List of time-series segments.
+        """
+        segments = []
+        count = 0
 
-def load_csv_folder(self, folder_path, max_segments=None):
-segments = []
-files = sorted([f for f in os.listdir(folder_path) if f.endswith('.csv')])
-if max_segments:
-files = files[:max_segments]
-for f in files:
-arr = pd.read_csv(os.path.join(folder_path, f), header=None).values.flatten()
-segments.append(arr)
-return segments
+        for file in os.listdir(data_dir):
+            if count >= limit:
+                break
+            
+            # Case 1: MATLAB .mat format
+            if file.endswith(".mat"):
+                mat = loadmat(os.path.join(data_dir, file))
+                if signal_type in mat:
+                    sig = np.array(mat[signal_type]).flatten()
+                    segments.append(sig)
+                    count += 1
+            
+            # Case 2: CSV format
+            elif file.endswith(".csv"):
+                df = pd.read_csv(os.path.join(data_dir, file))
+                if signal_type in df.columns:
+                    sig = df[signal_type].to_numpy()
+                    segments.append(sig)
+                    count += 1
 
-
-def load_from_single_csv(self, csv_path, max_segments=None):
-df = pd.read_csv(csv_path, header=None)
-if max_segments:
-df = df.iloc[:max_segments]
-return [row.values.astype(float) for _, row in df.iterrows()]
-
-
-@staticmethod
-def normalize_segments(segments):
-normed = []
-for s in segments:
-mu, sigma = np.mean(s), np.std(s)
-normed.append((s - mu) / sigma if sigma != 0 else np.zeros_like(s))
-return normed
-
-
-@staticmethod
-def toy_data(n_segments=4, length=100, seed=0):
-np.random.seed(seed)
-t = np.linspace(0, 2 * np.pi, length)
-segs = []
-for i in range(n_segments):
-amp = np.random.uniform(0.5, 1.5)
-phase = np.random.uniform(0, 2*np.pi)
-noise = np.random.normal(0, 0.1, length)
-seg = amp * np.sin(t + phase) + noise
-segs.append(seg)
-return segs
+        print(f"✅ Loaded {len(segments)} {signal_type} segments from {data_dir}")
+        return segments
